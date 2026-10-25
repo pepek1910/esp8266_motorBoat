@@ -5,6 +5,7 @@
 
 #include "motor_config.h"
 #include "motor_controller.h"
+#include "servo_controller.h"
 #include "web_server.h"
 
 namespace {
@@ -19,6 +20,7 @@ void begin() {
     delay(100);
 
     motor::begin();
+    servo_controller::begin();
 
     WiFi.persistent(false);
     WiFi.mode(WIFI_AP);

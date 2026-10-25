@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "web_page.h"
 
 const char INDEX_HTML[] PROGMEM = R"rawliteral(
@@ -5,11 +6,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
-
 <meta name="viewport"
       content="width=device-width, initial-scale=1">
 
-<title>Sterowanie silnikiem DC</title>
+<title>Sterowanie silnikiem DC i serwem</title>
 
 <style>
     body {
@@ -33,6 +33,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         text-align: center;
     }
 
+    h2 {
+        margin-top: 28px;
+        font-size: 19px;
+    }
+
     .direction-buttons {
         display: flex;
         gap: 10px;
@@ -54,19 +59,21 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         color: white;
     }
 
-    #value {
-        font-size: 38px;
+    .value {
+        font-size: 34px;
         font-weight: bold;
         text-align: center;
+        margin: 12px 0;
     }
 
     input[type=range] {
         width: 100%;
-        margin: 24px 0;
+        margin: 16px 0;
     }
 
     #stop {
         width: 100%;
+        margin-top: 12px;
         background: #d62828;
         color: white;
     }
@@ -76,22 +83,39 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         color: #555;
         margin-top: 20px;
     }
+
+    .description {
+        color: #666;
+        font-size: 14px;
+        line-height: 1.4;
+    }
+
+    hr {
+        border: 0;
+        border-top: 1px solid #ddd;
+        margin: 28px 0;
+    }
 </style>
 </head>
 
 <body>
 <div class="panel">
 
-    <h1>Sterowanie silnikiem DC</h1>
+    <h1>Sterowanie</h1>
+
+    <h2>Silnik DC</h2>
+
+    <p class="description">
+        Kierunek obrotów i prędkość silnika.
+    </p>
 
     <div class="direction-buttons">
-        <button id="forward">▲ PRZOD</button>
-        <button id="reverse">▼ TYL</button>
+        <button id="forward">▲ PRZÓD</button>
+        <button id="reverse">▼ TYŁ</button>
     </div>
 
-    <p>Ustawiona predkosc:</p>
-
-    <div id="value">0%</div>
+    <p>Prędkość silnika:</p>
+    <div class="value" id="speedValue">0%</div>
 
     <input
         id="speed"
@@ -99,93 +123,133 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         min="0"
         max="100"
         value="0"
-        aria-label="Predkosc silnika">
+        aria-label="Prędkość silnika">
 
-    <button id="stop">STOP</button>
+    <button id="stop">STOP SILNIKA</button>
 
-    <p id="status">Silnik zatrzymany</p>
+    <hr>
+
+    <h2>Pozycja serwa</h2>
+
+    <p class="description">
+        Ustaw kąt, w którym skierowany jest silnik.
+    </p>
+
+    <div class="value" id="angleValue">45°</div>
+
+    <input
+        id="angle"
+        type="range"
+        min="0"
+        max="90"
+        value="45"
+        aria-label="Kąt serwa">
+
+    <p class="description">
+        Zakres sterowania: 0°–90°.
+    </p>
+
+    <p id="status">Oczekiwanie na połączenie</p>
 
 </div>
 
 <script>
-const slider = document.getElementById('speed');
-const value = document.getElementById('value');
-const status = document.getElementById('status');
+const speedSlider = document.getElementById('speed');
+const speedValue = document.getElementById('speedValue');
+
+const angleSlider = document.getElementById('angle');
+const angleValue = document.getElementById('angleValue');
+
+const statusElement = document.getElementById('status');
 
 let currentSpeed = 0;
 let requestInProgress = false;
+let angleRequestTimer = null;
+
+async function request(url) {
+    const response = await fetch(url, {
+        cache: 'no-store'
+    });
+
+    if (!response.ok) {
+        throw new Error('HTTP ' + response.status);
+    }
+}
 
 async function sendSpeed(percent) {
     try {
-        const response = await fetch(
-            '/speed?v=' + percent,
-            { cache: 'no-store' }
-        );
-
-        if (!response.ok) {
-            throw new Error('HTTP error');
-        }
+        await request('/speed?v=' + percent);
 
         currentSpeed = percent;
 
-        status.textContent = percent === 0
+        statusElement.textContent = percent === 0
             ? 'Silnik zatrzymany'
             : 'Silnik pracuje';
 
     } catch (e) {
-        status.textContent =
-            'Brak polaczenia z ESP8266';
+        statusElement.textContent = 'Brak połączenia z ESP8266';
     }
 }
 
 async function sendDirection(direction) {
     try {
-        const response = await fetch(
-            '/direction?d=' + direction,
-            { cache: 'no-store' }
-        );
+        await request('/direction?d=' + direction);
 
-        if (!response.ok) {
-            throw new Error('HTTP error');
-        }
-
-        status.textContent =
+        statusElement.textContent =
             direction === 'forward'
-                ? 'Kierunek: przod'
-                : 'Kierunek: tyl';
+                ? 'Silnik DC: kierunek przód'
+                : 'Silnik DC: kierunek tył';
 
     } catch (e) {
-        status.textContent =
-            'Brak polaczenia z ESP8266';
+        statusElement.textContent = 'Brak połączenia z ESP8266';
     }
 }
 
-// Regulacja predkosci
-slider.addEventListener('input', () => {
-    value.textContent = slider.value + '%';
-    sendSpeed(Number(slider.value));
+async function sendServoAngle(angle) {
+    try {
+        await request('/servo?angle=' + angle);
+        statusElement.textContent = 'Ustawiono kąt serwa: ' + angle + '°';
+    } catch (e) {
+        statusElement.textContent = 'Błąd ustawiania serwa';
+    }
+}
+
+// Prędkość silnika DC
+speedSlider.addEventListener('input', () => {
+    speedValue.textContent = speedSlider.value + '%';
+    sendSpeed(Number(speedSlider.value));
 });
 
-// Zmiana kierunku
-document.getElementById('forward')
-    .addEventListener('click', () => {
-        sendDirection('forward');
-    });
+// Kierunek obrotów silnika DC
+document.getElementById('forward').addEventListener('click', () => {
+    sendDirection('forward');
+});
 
-document.getElementById('reverse')
-    .addEventListener('click', () => {
-        sendDirection('reverse');
-    });
+document.getElementById('reverse').addEventListener('click', () => {
+    sendDirection('reverse');
+});
 
-// STOP
-document.getElementById('stop')
-    .addEventListener('click', () => {
-        slider.value = 0;
-        value.textContent = '0%';
-        sendSpeed(0);
-    });
+// STOP dotyczy silnika DC, nie zmienia pozycji serwa
+document.getElementById('stop').addEventListener('click', () => {
+    speedSlider.value = 0;
+    speedValue.textContent = '0%';
+    sendSpeed(0);
+});
 
-// Podtrzymanie komunikacji
+// Kąt serwa — wysyłaj po krótkiej przerwie w przesuwaniu suwaka
+angleSlider.addEventListener('input', () => {
+    angleValue.textContent = angleSlider.value + '°';
+
+    if (angleRequestTimer !== null) {
+        clearTimeout(angleRequestTimer);
+    }
+
+    angleRequestTimer = setTimeout(() => {
+        sendServoAngle(Number(angleSlider.value));
+    }, 120);
+});
+
+// Podtrzymanie połączenia, gdy silnik DC pracuje
 async function heartbeat() {
     if (currentSpeed === 0 || requestInProgress) {
         return;
@@ -194,24 +258,23 @@ async function heartbeat() {
     requestInProgress = true;
 
     try {
-        const response = await fetch(
-            '/heartbeat',
-            { cache: 'no-store' }
-        );
-
-        if (!response.ok) {
-            throw new Error('HTTP error');
-        }
-
+        await request('/heartbeat');
     } catch (e) {
-        status.textContent = 'Utracono polaczenie';
-
+        statusElement.textContent = 'Utracono połączenie';
     } finally {
         requestInProgress = false;
     }
 }
 
 setInterval(heartbeat, 500);
+
+request('/')
+    .then(() => {
+        statusElement.textContent = 'Połączono z ESP8266';
+    })
+    .catch(() => {
+        statusElement.textContent = 'Brak połączenia z ESP8266';
+    });
 </script>
 
 </body>

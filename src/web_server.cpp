@@ -3,6 +3,7 @@
 
 #include "web_server.h"
 #include "motor_controller.h"
+#include "servo_controller.h"
 #include "web_page.h"
 
 namespace {
@@ -69,6 +70,41 @@ namespace {
         server.send(200, "text/plain", "OK");
     }
 
+    void handleServo() {
+        if (!server.hasArg("angle")) {
+            server.send(400, "text/plain", "Missing angle");
+            return;
+        }
+
+        const String argument = server.arg("angle");
+
+        if (argument.length() == 0) {
+            server.send(400, "text/plain", "Invalid angle");
+            return;
+        }
+
+        for (size_t i = 0; i < argument.length(); ++i) {
+            if (!isDigit(argument[i])) {
+                server.send(400, "text/plain", "Invalid angle");
+                return;
+            }
+        }
+
+        const int requested = argument.toInt();
+
+        if (requested > 90) {
+            server.send(400, "text/plain", "Angle must be 0-90");
+            return;
+        }
+
+        servo_controller::setAngle(
+            static_cast<uint8_t>(requested)
+        );
+
+        server.sendHeader("Cache-Control", "no-store");
+        server.send(200, "text/plain", "OK");
+    }
+
     void handleHeartbeat() {
         if (motor::speedPercent() > 0) {
             motor::refreshHeartbeat();
@@ -88,7 +124,9 @@ void begin() {
     server.on("/", HTTP_GET, handleRoot);
     server.on("/speed", HTTP_GET, handleSpeed);
     server.on("/direction", HTTP_GET, handleDirection);
+    server.on("/servo", HTTP_GET, handleServo);
     server.on("/heartbeat", HTTP_GET, handleHeartbeat);
+
     server.onNotFound(handleNotFound);
 
     server.begin();
