@@ -68,3 +68,19 @@ alter table public.measurements add column if not exists has_valid_time boolean 
 - `SensorService` zawiera obecnie dane przykładowe - podmień na DHT/HX711.
 - `setInsecure()` w HTTPS upraszcza testy, ale w wersji docelowej warto rozważyć pinning certyfikatu.
 - Dla telemetrii najlepiej trzymać czas w UTC.
+
+## Podlaczenie
+ESP8266, B32v4, Stab 5V, Supply 12V
+GND wspolne
+D1 -> IN3
+D2 -> IN2
+D5 -> IN1
+D6 -> Servo Yellow
+
+Supply (12v) -> Stab 5v (IN+)
+Supply (GND) -> Stab 5V (IN-)
+Supply (12v) -> B32v4 (IN+)
+Supply (GND) -> B32v4 (IN-)
+
+Stab (GND) -> Servo Brown
+Stab (OUT+) -> Servo Red
