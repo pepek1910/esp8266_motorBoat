@@ -1,14 +1,16 @@
-#include "motor_controller.h"
+#include <Arduino.h>
 
+#include "motor_controller.h"
 #include "motor_config.h"
 
 namespace {
-uint8_t currentSpeedPercent = 0;
-bool reverseDirection = false;
-uint32_t lastHeartbeat = 0;
+    uint8_t currentSpeedPercent = 0;
+    bool reverseDirection = false;
+    uint32_t lastHeartbeat = 0;
 }
 
 namespace motor {
+
 void begin() {
     pinMode(motor_config::PIN_PWMA, OUTPUT);
     pinMode(motor_config::PIN_AIN1, OUTPUT);
@@ -20,8 +22,12 @@ void begin() {
     digitalWrite(motor_config::PIN_AIN2, LOW);
 
     analogWriteRange(motor_config::PWM_MAX);
-    analogWriteFreq(1000);
+    analogWriteFreq(motor_config::PWM_FREQUENCY_HZ);
     analogWrite(motor_config::PIN_PWMA, 0);
+
+    currentSpeedPercent = 0;
+    reverseDirection = false;
+    lastHeartbeat = millis();
 }
 
 void stop() {
@@ -32,26 +38,49 @@ void stop() {
 }
 
 void setSpeed(uint8_t percent) {
-    percent = constrain(percent, 0, 100);
+    if (percent > 100) {
+        percent = 100;
+    }
 
     if (percent == 0) {
         stop();
         return;
     }
 
-    digitalWrite(motor_config::PIN_AIN1, reverseDirection ? LOW : HIGH);
-    digitalWrite(motor_config::PIN_AIN2, reverseDirection ? HIGH : LOW);
+    digitalWrite(
+        motor_config::PIN_AIN1,
+        reverseDirection ? LOW : HIGH
+    );
+
+    digitalWrite(
+        motor_config::PIN_AIN2,
+        reverseDirection ? HIGH : LOW
+    );
+
     digitalWrite(motor_config::PIN_STBY, HIGH);
 
     const uint16_t pwm =
         (static_cast<uint32_t>(percent) * motor_config::PWM_MAX) / 100;
-    analogWrite(motor_config::PIN_PWMA, pwm);
 
+    analogWrite(motor_config::PIN_PWMA, pwm);
     currentSpeedPercent = percent;
 }
 
 void setDirection(bool reverse) {
+    if (reverseDirection == reverse) {
+        return;
+    }
+
+    const uint8_t previousSpeed = currentSpeedPercent;
+
+    stop();
+    delay(motor_config::DIRECTION_CHANGE_DELAY_MS);
+
     reverseDirection = reverse;
+
+    if (previousSpeed > 0) {
+        setSpeed(previousSpeed);
+    }
 }
 
 uint8_t speedPercent() {
@@ -64,6 +93,8 @@ void refreshHeartbeat() {
 
 bool heartbeatTimedOut() {
     return currentSpeedPercent > 0 &&
-        millis() - lastHeartbeat > motor_config::HEARTBEAT_TIMEOUT_MS;
+        (millis() - lastHeartbeat >
+         motor_config::HEARTBEAT_TIMEOUT_MS);
 }
+
 }

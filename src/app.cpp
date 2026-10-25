@@ -7,7 +7,13 @@
 #include "motor_controller.h"
 #include "web_server.h"
 
+namespace {
+    bool appReady = false;
+    bool timeoutMessagePrinted = false;
+}
+
 namespace app {
+
 void begin() {
     Serial.begin(115200);
     delay(100);
@@ -27,26 +33,35 @@ void begin() {
         return;
     }
 
+    web_server::begin();
+    appReady = true;
+
     Serial.println();
     Serial.println("ESP8266 Motor Controller");
-
     Serial.print("Wi-Fi: ");
     Serial.println(motor_config::AP_SSID);
-
     Serial.print("Panel: http://");
     Serial.println(WiFi.softAPIP());
-
-    web_server::begin();
-
     Serial.println("HTTP server started");
 }
 
 void loop() {
+    if (!appReady) {
+        return;
+    }
+
     web_server::handleClient();
 
     if (motor::heartbeatTimedOut()) {
         motor::stop();
-        Serial.println("Motor stopped: heartbeat timeout");
+
+        if (!timeoutMessagePrinted) {
+            Serial.println("Motor stopped: heartbeat timeout");
+            timeoutMessagePrinted = true;
+        }
+    } else if (motor::speedPercent() > 0) {
+        timeoutMessagePrinted = false;
     }
 }
+
 }
