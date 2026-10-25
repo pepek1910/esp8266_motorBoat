@@ -12,25 +12,26 @@ namespace {
 namespace servo_controller {
 
 void begin() {
-    servo.attach(motor_config::PIN_SERVO);
-
+    servo.attach(motor_config::PIN_SERVO, 400, 2200);
     currentAngle = motor_config::SERVO_INITIAL_ANGLE;
     servo.write(currentAngle);
-
     delay(300);
 }
 
 void setAngle(uint8_t angle) {
-    if (angle < motor_config::SERVO_MIN_ANGLE) {
+    if (angle < motor_config::SERVO_MIN_ANGLE)
         angle = motor_config::SERVO_MIN_ANGLE;
-    }
 
-    if (angle > motor_config::SERVO_MAX_ANGLE) {
+    if (angle > motor_config::SERVO_MAX_ANGLE)
         angle = motor_config::SERVO_MAX_ANGLE;
-    }
 
     currentAngle = angle;
-    servo.write(currentAngle);
+
+    // Panel: 0–90°
+    // Serwo: 0–72°, aby wartość 45° odpowiadała 36°
+    const int servoAngle = map(angle, 0, 90, 0, 72);
+
+    servo.write(servoAngle);
 }
 
 uint8_t getAngle() {
